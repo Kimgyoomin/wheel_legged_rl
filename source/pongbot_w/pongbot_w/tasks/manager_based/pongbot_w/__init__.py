@@ -13,7 +13,8 @@ from . import agents
 
 
 gym.register(
-    id="Template-Pongbot-W-v0",
+    # id="Template-Pongbot-W-v0",
+    id="Isaac-Velocity-Flat-PongbotW-Baseline-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
