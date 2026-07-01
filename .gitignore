@@ -92,3 +92,22 @@ videos/
 *.ckpt
 
 
+
+# ------------------------------------------------------------------------------
+# Local robot/simulator assets
+# ------------------------------------------------------------------------------
+# Keep robot USD/URDF/mesh/collision assets out of GitHub.
+# These files are large, frequently regenerated, and machine/project-specific.
+/assets/
+assets/
+**/assets/
+
+# Extra guard for robot asset formats
+*.stl
+*.STL
+*.obj
+*.dae
+*.fbx
+*.glb
+*.gltf
+*.mtl
