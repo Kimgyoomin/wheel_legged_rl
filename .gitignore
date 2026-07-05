@@ -90,6 +90,8 @@ videos/
 *.pt
 *.pth
 *.ckpt
+*.onnx
+*.csv
 
 
 

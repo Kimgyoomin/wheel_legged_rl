@@ -49,10 +49,21 @@ WHEEL_DEFAULT_JOINT_POS = {
 
 WHEEL_BODY_NAMES = ["FL_WHEEL", "FR_WHEEL", "RL_WHEEL", "RR_WHEEL"]
 
+NOMINAL_WHEEL_POS_B = [
+    (0.322278, 0.255564, -0.490892),   # FL_WHEEL
+    (0.321802, -0.263395, -0.486753),  # FR_WHEEL
+    (-0.318136, 0.261215, -0.484207),  # RL_WHEEL
+    (-0.302186, -0.266972, -0.479714), # RR_WHEEL
+]
+
 GAIT_PERIOD = 0.72
 GAIT_MARGIN = 0.35
 WHEEL_CONTACT_THRESHOLD = 1.0
 SWING_WHEEL_HEIGHT = 0.16
+
+RAIBERT_X_GAIN = 0.10
+RAIBERT_Y_GAIN = 0.12
+RAIBERT_YAW_GAIN = 0.08
 
 ##
 # Robot config
@@ -160,9 +171,9 @@ class CommandsCfg:
         heading_command=False,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 0.8),
-            lin_vel_y=(-0.25, 0.25),
-            ang_vel_z=(-0.8, 0.8),
+            lin_vel_x=(-0.3, 0.6),
+            lin_vel_y=(-0.10, 0.10),
+            ang_vel_z=(-1.0, 1.0),
             heading=(-math.pi, math.pi),
         ),
     )
@@ -402,6 +413,27 @@ class RewardsCfg:
             "period": GAIT_PERIOD,
             "margin": GAIT_MARGIN,
             "target_height": SWING_WHEEL_HEIGHT,
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                body_names=WHEEL_BODY_NAMES,
+            ),
+        },
+    )
+
+    # Command-conditioned swing wheel placement.
+    # This tells the policy not only "when to swing" but also "where to place"
+    # the swing wheel according to vx, vy, and yaw command.
+    raibert_swing_placement = RewTerm(
+        func=mdp.raibert_swing_wheel_placement_l2,
+        weight=-1.0,
+        params={
+            "command_name": "base_velocity",
+            "period": GAIT_PERIOD,
+            "margin": GAIT_MARGIN,
+            "nominal_wheel_pos_b": NOMINAL_WHEEL_POS_B,
+            "x_gain": RAIBERT_X_GAIN,
+            "y_gain": RAIBERT_Y_GAIN,
+            "yaw_gain": RAIBERT_YAW_GAIN,
             "asset_cfg": SceneEntityCfg(
                 "robot",
                 body_names=WHEEL_BODY_NAMES,
