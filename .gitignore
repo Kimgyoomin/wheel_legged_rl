@@ -93,6 +93,11 @@ videos/
 *.onnx
 *.csv
 
+# Sim2Sim generated cache and exported binaries
+sim2sim/.cache/
+sim2sim/exported/*
+!sim2sim/exported/.gitkeep
+
 
 
 # ------------------------------------------------------------------------------

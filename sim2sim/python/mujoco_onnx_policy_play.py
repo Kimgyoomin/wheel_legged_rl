@@ -9,12 +9,13 @@ from pathlib import Path
 
 import numpy as np
 
-_SIM2SIM_ROOT = Path(__file__).resolve().parents[1]
-if str(_SIM2SIM_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SIM2SIM_ROOT))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from common.math_utils import projected_gravity
-from common.pongbot_contract import (
+from sim2sim.common.math_utils import projected_gravity, quat_rotate_inverse
+from sim2sim.common.model_resolver import make_mujoco_resolved_xml
+from sim2sim.common.pongbot_contract import (
     ACTION_DIM,
     BASE_RESET_POS_Z,
     BASE_RESET_QUAT_WXYZ,
@@ -119,10 +120,13 @@ def _key_callback_factory(state):
     return _callback
 
 
-def _body_vel_local(mujoco, model, data, body_id: int):
-    vel = np.zeros(6, dtype=np.float64)
-    mujoco.mj_objectVelocity(model, data, mujoco.mjtObj.mjOBJ_BODY, body_id, vel, 1)
-    return vel[3:].copy(), vel[:3].copy()
+def _freejoint_base_vel_b(data, freejoint):
+    qadr = freejoint["qposadr"]
+    dadr = freejoint["dofadr"]
+    quat_wxyz = np.array(data.qpos[qadr + 3 : qadr + 7], dtype=np.float64)
+    lin_vel_w = np.array(data.qvel[dadr : dadr + 3], dtype=np.float64)
+    ang_vel_w = np.array(data.qvel[dadr + 3 : dadr + 6], dtype=np.float64)
+    return quat_rotate_inverse(quat_wxyz, lin_vel_w), quat_rotate_inverse(quat_wxyz, ang_vel_w)
 
 
 def _phase_terms(time_s: float):
@@ -142,7 +146,7 @@ def _joint_vel(data, joint_map):
 
 
 def _build_observation(mujoco, model, data, joint_map, freejoint, previous_action, command):
-    base_lin_vel_b, base_ang_vel_b = _body_vel_local(mujoco, model, data, freejoint["body_id"])
+    base_lin_vel_b, base_ang_vel_b = _freejoint_base_vel_b(data, freejoint)
     qadr = freejoint["qposadr"]
     gravity_b = projected_gravity(np.array(data.qpos[qadr + 3 : qadr + 7], dtype=np.float64)).astype(np.float32)
     phase_sin, phase_cos = _phase_terms(float(data.time))
@@ -243,6 +247,8 @@ def main() -> int:
     parser.add_argument("--dt-policy", type=float, default=POLICY_DT, help="Policy update period [s]")
     parser.add_argument("--log-csv", default=None, help="Optional CSV log path")
     parser.add_argument("--duration", type=float, default=120.0, help="Max duration [s]")
+    parser.add_argument("--mesh-dir", type=str, default=None, help="Optional explicit mesh directory")
+    parser.add_argument("--keep-resolved-model", action="store_true", default=True)
     args = parser.parse_args()
 
     try:
@@ -255,7 +261,15 @@ def main() -> int:
     except ImportError as exc:
         raise SystemExit("onnxruntime is required. Install with: python -m pip install onnxruntime") from exc
 
-    model = mujoco.MjModel.from_xml_path(str(Path(args.model).expanduser()))
+    resolved_model_path = make_mujoco_resolved_xml(
+        model_path=args.model,
+        mesh_dir=args.mesh_dir,
+        keep=args.keep_resolved_model,
+    )
+    print("[INFO] Original model:", args.model)
+    print("[INFO] Resolved model:", resolved_model_path)
+
+    model = mujoco.MjModel.from_xml_path(str(resolved_model_path))
     data = mujoco.MjData(model)
     joint_map = _resolve_joint_map(mujoco, model)
     _resolve_body_map(mujoco, model)
@@ -311,7 +325,7 @@ def main() -> int:
                 torques = _apply_action(data, joint_map, leg_target, wheel_target)
                 mujoco.mj_step2(model, data)
 
-            base_lin_vel_b, base_ang_vel_b = _body_vel_local(mujoco, model, data, freejoint["body_id"])
+            base_lin_vel_b, base_ang_vel_b = _freejoint_base_vel_b(data, freejoint)
             qadr = freejoint["qposadr"]
             gravity_b = projected_gravity(np.array(data.qpos[qadr + 3 : qadr + 7], dtype=np.float64))
             joint_pos = _joint_pos_rel(data, joint_map)

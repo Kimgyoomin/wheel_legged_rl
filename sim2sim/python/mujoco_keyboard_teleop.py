@@ -7,11 +7,12 @@ from pathlib import Path
 
 import numpy as np
 
-_SIM2SIM_ROOT = Path(__file__).resolve().parents[1]
-if str(_SIM2SIM_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SIM2SIM_ROOT))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from common.pongbot_contract import (
+from sim2sim.common.model_resolver import make_mujoco_resolved_xml
+from sim2sim.common.pongbot_contract import (
     BASE_RESET_POS_Z,
     BASE_RESET_QUAT_WXYZ,
     JOINT_ORDER,
@@ -114,6 +115,8 @@ def _compute_wheel_targets(cmd_vx: float, cmd_wz: float, wheelbase_half: float =
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True, help="URDF or MJCF path")
+    parser.add_argument("--mesh-dir", type=str, default=None, help="Optional explicit mesh directory")
+    parser.add_argument("--keep-resolved-model", action="store_true", default=True)
     args = parser.parse_args()
 
     try:
@@ -122,10 +125,20 @@ def main() -> int:
     except ImportError as exc:
         raise SystemExit("mujoco is required. Install with: python -m pip install mujoco") from exc
 
-    model = mujoco.MjModel.from_xml_path(str(Path(args.model).expanduser()))
+    resolved_model_path = make_mujoco_resolved_xml(
+        model_path=args.model,
+        mesh_dir=args.mesh_dir,
+        keep=args.keep_resolved_model,
+    )
+    print("[INFO] Original model:", args.model)
+    print("[INFO] Resolved model:", resolved_model_path)
+
+    model = mujoco.MjModel.from_xml_path(str(resolved_model_path))
     data = mujoco.MjData(model)
     joint_map = _resolve_joint_map(mujoco, model)
     freejoint = _find_freejoint(mujoco, model)
+    if freejoint is None:
+        raise RuntimeError("This model has no freejoint. Use build_freebase_mjcf.py first.")
     _reset_pose(mujoco, model, data, joint_map, freejoint)
 
     state = {

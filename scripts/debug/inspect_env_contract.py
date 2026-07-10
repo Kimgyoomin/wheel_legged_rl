@@ -76,6 +76,11 @@ def main() -> None:
         num_envs=args_cli.num_envs,
     )
 
+    print("\n=== Timing config ===")
+    print("env_cfg.sim.dt:", env_cfg.sim.dt)
+    print("env_cfg.decimation:", env_cfg.decimation)
+    print("policy_dt:", env_cfg.sim.dt * env_cfg.decimation)
+
     env = gym.make(args_cli.task, cfg=env_cfg)
     obs, info = env.reset()
 
@@ -113,6 +118,17 @@ def main() -> None:
     policy_obs = obs["policy"] if isinstance(obs, dict) and "policy" in obs else obs
     print("policy_obs_per_env_dim:", flatten_dim(policy_obs))
     print("action_dim:", action_manager.total_action_dim)
+
+    robot = env.unwrapped.scene["robot"]
+
+    print("\n=== Robot articulation joint order ===")
+    for i, name in enumerate(robot.joint_names):
+        print(f"{i:02d}: {name}")
+
+    print("\n=== Robot default joint positions ===")
+    default_joint_pos = robot.data.default_joint_pos[0].detach().cpu().numpy()
+    for i, name in enumerate(robot.joint_names):
+        print(f"{i:02d}: {name:24s} default={default_joint_pos[i]: .6f}")
 
     env.close()
 
